@@ -1,138 +1,130 @@
-import pygame as pg
-import sys
-from random import randrange
+import pygame
+import random
 
-vec2 = pg.math.Vector2
+# Initialize Pygame
+pygame.init()
 
-class Snake:
-    def __init__(self, game):
-        self.game = game
-        self.size = game.TILE_SIZE
-        self.rect = pg.rect.Rect([0, 0, game.TILE_SIZE - 2, game.TILE_SIZE - 2])
-        self.range = (self.size // 2, self.game.WINDOW_SIZE - self.size // 2, self.size)
-        self.rect.center = self.get_random_position()
-        self.direction = vec2(0, 0)
-        self.step_delay = 100  # milliseconds
-        self.time = 0
-        self.length = 1
-        self.segments = []
-        self.directions = {pg.K_w: 1, pg.K_s: 1, pg.K_a: 1, pg.K_d: 1}
-        
-    def control(self, event):
-        if event.type == pg.KEYDOWN:
-            if event.key == pg.K_w and self.directions[pg.K_w]:
-                self.direction = vec2(0, -self.size)
-                self.directions = {pg.K_w: 1, pg.K_s: 0, pg.K_a: 1, pg.K_d: 1}
+# Set up the screen
+WIDTH, HEIGHT = 800, 600
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Simple Shooter Game")
 
-            if event.key == pg.K_s and self.directions[pg.K_s]:
-                self.direction = vec2(0, self.size)
-                self.directions = {pg.K_w: 0, pg.K_s: 1, pg.K_a: 1, pg.K_d: 1}
+# Define colors
+WHITE = (255, 255, 255)
+RED = (255, 0, 0)
+BLUE = (0, 0, 255)
+BLACK = (0, 0, 0)
 
-            if event.key == pg.K_a and self.directions[pg.K_a]:
-                self.direction = vec2(-self.size, 0)
-                self.directions = {pg.K_w: 1, pg.K_s: 1, pg.K_a: 1, pg.K_d: 0}
+# Define player properties
+player_width, player_height = 50, 50
+player_x, player_y = WIDTH // 2, HEIGHT - player_height - 10
+player_speed = 5
 
-            if event.key == pg.K_d and self.directions[pg.K_d]:
-                self.direction = vec2(self.size, 0)
-                self.directions = {pg.K_w: 1, pg.K_s: 1, pg.K_a: 0, pg.K_d: 1}
+# Define enemy properties
+enemy_width, enemy_height = 50, 50
+enemies = []
+enemy_speed = 3
+enemy_spawn_rate = 60  # Rate of spawning enemies
 
-    def delta_time(self):
-        time_now = pg.time.get_ticks()
-        if time_now - self.time > self.step_delay:
-            self.time = time_now
-            return True
-        return False
+# Define bullet properties
+bullet_width, bullet_height = 5, 20
+bullet_speed = 5
+bullets = []
 
-    def get_random_position(self):
-        return [randrange(*self.range), randrange(*self.range)]
+# Define font
+font = pygame.font.Font(None, 36)
 
-    def check_borders(self):
-        if self.rect.left < 0 or self.rect.right > self.game.WINDOW_SIZE:
-            self.game.new_game()
-        if self.rect.top < 0 or self.rect.bottom > self.game.WINDOW_SIZE:
-            self.game.new_game()
+# Function to draw text on screen
+def draw_text(text, color, x, y):
+    text_surface = font.render(text, True, color)
+    screen.blit(text_surface, (x, y))
 
-    def check_food(self):
-        if self.rect.center == self.game.food.rect.center:
-            self.game.food.rect.center = self.get_random_position()
-            self.length += 1
+# Function to display game over screen
+def show_game_over():
+    screen.fill(BLACK)
+    draw_text("GAME OVER", RED, WIDTH // 2 - 100, HEIGHT // 2 - 50)
+    draw_text(f"Score: {score}", WHITE, WIDTH // 2 - 50, HEIGHT // 2)
+    pygame.display.update()
+    pygame.time.delay(2000)  # Delay for 2 seconds before quitting
 
-    def check_selfeating(self):
-        if len(self.segments) != len(set(segment.center for segment in self.segments)):
-            self.game.new_game()
+# Game loop
+running = True
+clock = pygame.time.Clock()
+score = 0
+game_over = False
+while running:
+    screen.fill(WHITE)
 
-    def move(self):
-        if self.delta_time():
-            self.rect.move_ip(self.direction)
-            self.segments.append(self.rect.copy())
-            self.segments = self.segments[-self.length:]
+    # Event handling
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_SPACE and not game_over:
+                bullets.append(pygame.Rect(player_x + player_width // 2 - bullet_width // 2, player_y - bullet_height, bullet_width, bullet_height))
 
-    def update(self):
-        self.check_selfeating()
-        self.check_borders()
-        self.check_food()
-        self.move()
+    # Player movement
+    keys = pygame.key.get_pressed()
+    if keys[pygame.K_LEFT] and player_x > 0:
+        player_x -= player_speed
+    if keys[pygame.K_RIGHT] and player_x < WIDTH - player_width:
+        player_x += player_speed
 
-    def draw(self):
-        [pg.draw.rect(self.game.screen, 'green', segment) for segment in self.segments]
+    if not game_over:
+        # Enemy spawning
+        if random.randint(0, enemy_spawn_rate) == 0:
+            enemy_x = random.randint(0, WIDTH - enemy_width)
+            enemies.append(pygame.Rect(enemy_x, -enemy_height, enemy_width, enemy_height))
 
+        # Enemy movement and firing
+        for enemy in enemies[:]:
+            # Move enemy downwards
+            enemy.y += enemy_speed
 
-class Food:
-    def __init__(self, game):
-        self.game = game
-        self.size = game.TILE_SIZE
-        self.rect = pg.rect.Rect([0, 0, game.TILE_SIZE - 2, game.TILE_SIZE - 2])
-        self.rect.center = self.game.snake.get_random_position()
+            # Enemy firing
+            if random.randint(0, 100) == 0:  # Adjust firing rate as needed
+                bullets.append(pygame.Rect(enemy.x + enemy_width // 2 - bullet_width // 2, enemy.y + enemy_height, bullet_width, bullet_height))
 
-    def draw(self):
-        pg.draw.rect(self.game.screen, 'red', self.rect)
+            # Remove enemy if it goes past the bottom of the screen
+            if enemy.y > HEIGHT + enemy_height:
+                enemies.remove(enemy)
 
+        # Bullet movement and collision with enemies
+        for bullet in bullets[:]:
+            bullet.y -= bullet_speed
+            for enemy in enemies[:]:
+                if bullet.colliderect(enemy):
+                    bullets.remove(bullet)
+                    enemies.remove(enemy)
+                    score += 1
+                    break
+            if bullet.y < 0:
+                bullets.remove(bullet)
 
-class Game:
-    def __init__(self):
-        pg.init()
-        self.WINDOW_SIZE = 1000
-        self.TILE_SIZE = 50
-        self.screen = pg.display.set_mode([self.WINDOW_SIZE] * 2)
-        self.clock = pg.time.Clock()
-        self.new_game()
+        # Check for collision with player
+        for enemy in enemies:
+            if enemy.colliderect(pygame.Rect(player_x, player_y, player_width, player_height)):
+                game_over = True
+                break
 
-    def draw_grid(self):
-        [pg.draw.line(self.screen, [50] * 3, (x, 0), (x, self.WINDOW_SIZE))
-                                             for x in range(0, self.WINDOW_SIZE, self.TILE_SIZE)]
-        [pg.draw.line(self.screen, [50] * 3, (0, y), (self.WINDOW_SIZE, y))
-                                             for y in range(0, self.WINDOW_SIZE, self.TILE_SIZE)]
+        # Draw player
+        pygame.draw.rect(screen, BLUE, (player_x, player_y, player_width, player_height))
 
-    def new_game(self):
-        self.snake = Snake(self)
-        self.food = Food(self)
+        # Draw enemies
+        for enemy in enemies:
+            pygame.draw.rect(screen, RED, enemy)
 
-    def update(self):
-        self.snake.update()
-        pg.display.flip()
-        self.clock.tick(60)
+        # Draw bullets
+        for bullet in bullets:
+            pygame.draw.rect(screen, BLUE, bullet)
 
-    def draw(self):
-        self.screen.fill('black')
-        self.draw_grid()
-        self.food.draw()
-        self.snake.draw()
+        # Draw score
+        draw_text(f"Score: {score}", BLUE, 10, 10)
+    else:
+        show_game_over()
 
-    def check_event(self):
-        for event in pg.event.get():
-            if event.type == pg.QUIT:
-                pg.quit()
-                sys.exit()
-            # snake control
-            self.snake.control(event)
+    pygame.display.update()
+    clock.tick(60)
 
-    def run(self):
-        while True:
-            self.check_event()
-            self.update()
-            self.draw()
-
-
-if __name__ == '__main__':
-    game = Game()
-    game.run()
+# Quit Pygame
+pygame.quit()
